@@ -12,6 +12,8 @@ library(caret)
 library(OneR)
 library(mlbench)
 library(e1071)
+library(rpart)
+
 ```
 
 #Exploratory Data Analysis 
@@ -122,4 +124,62 @@ rfe <- rfe(phish.train[,1:30], as.factor(phish.train[,31]), sizes = c(1:30), rfe
 
 ```{r}
 rfe
+```
+
+Recursive feature extraction with 25 repetition of bootstraps reports that the top 5 variables are SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, and Links_in_tags. 
+
+##Modeling for Ripper - use RIPPER to create a rule set
+
+```{r}
+phish.ripper <- JRip(Result ~ ., data = phish.train)
+print(phish.ripper)
+```
+
+```{r}
+summary(phish.ripper)
+```
+
+96% Accuracy? Has to be overfitting. So let's evaluate on the testing data.
+
+```{r}
+phish.ripper.test <- JRip(Result ~ ., data = phish.test)
+summary(phish.ripper.test)
+```
+
+RIPPER on the testing set gives a very similar accuracy of 95%. 
+
+##Modeling using a C4.5 Decision Tree
+
+```{r}
+phish.c45tree <- J48(Result ~ ., data = phish.train)
+summary(phish.c45tree)
+```
+
+###Evaluation for C4.5 Decision Tree
+
+```{r}
+phish.c45tree.eval <- J48(Result ~ ., data = phish.test)
+summary(phish.c45tree.eval)
+```
+
+##Modeling with Gradiant Boosting Algorithms
+
+XGboost is a Kaggle favorite and kind of the cool kid on the block. 
+
+XGboost can only deal with numeric data, not categorical. So we'll have to encode the categorical data with one-hot encoding. A sparse matrix function can be used to preform one-hot encoding.
+
+```{r}
+sparse_matrix <- sparse.model.matrix(Result ~ ., data = phish.train)
+output_vector <- df[,Result] == 1
+```
+
+Now we build the xgboost model.
+
+```{r}
+phish.xgboost <- xgboost(data = sparse_matrix, label = output_vector, max_depth = 4, eta = 1, nthread = 2, nrounds = 10, objective = "binary:logistic")
+
+phish.xg.pred <- predict(phish.xgboost, phish.test)
+
+eval_model(phish.xg.pred, phish.test)
+
 ```
