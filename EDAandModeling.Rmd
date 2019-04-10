@@ -1,0 +1,125 @@
+---
+title: "Exploratory Data Analysis and Modeling"
+author: "Veronica Weiss"
+date: "4/6/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(corrplot)
+library(caret)
+library(OneR)
+library(mlbench)
+library(e1071)
+```
+
+#Exploratory Data Analysis 
+
+
+```{r}
+phish <- read.csv('/Users/vee/Downloads/TrainingDataset.csv')
+```
+
+We begin Exploratory Data Analysis by seeing the correlations between the variables.
+#Show half of the plot
+#Box plots to show the different levels of 0 and 1 
+#Tapply (quantitative, categorical, function)
+```{r}
+cor.p <- cor(phish)
+cor.p[]
+cor.p
+corrplot(cor.p, type = "upper", tl.pos = "td",
+         method = "circle", tl.cex = 0.5, tl.col = 'black',
+         order = "hclust", diag = FALSE)
+```
+
+It appears that a relationship between domain_registration length and the following variables: URL_Length, Result, Request_URL. Based on the correlation, Domain_registration_length has the strongest relationship with Request_URL. 
+
+It appears that Redirect has a relationship between DNSRecord, Having_IP_Address, Abnormal_URL, HTTPS_token, Shortnining_Service, and double_slash_redirecting. The strongest relationship for Redirect seems to be double_slash_redirecting in the negative direction, but the other 4 variables previously listed are also somewhat strongly negatively related to Redirect. 
+
+It appears that links_pointing_to_page has a strong negative relationship with having_IP_address and DNSRecord.
+
+The following are strong positive correlations in this dataset:
+RightClick and iFrame
+RightClick and Port
+RightClick and Submitting_to_Email
+RightClick and on_mouseover
+RightClick and Favicon
+RightClick and Pop up Window
+SSLfinal_State and Result
+URL_of_Anchor and Result 
+URL_Length and SFH
+
+The following are strong negative correlations in this dataset:
+Request_URL and Domain_registration_length
+Abnormal_URL and Redirect
+HTTPs_Token and Redirect
+Shortning_Service and Redirect
+double_slash_redirecting and Redirect
+
+
+Variables with one or more positive otable correlation are: Shortning_Service, HTTPS_Token, Abnormal_URL, DNSRecord, Favicon, on_mouseover, Submitting_to_email, port, iframe, RightClick,SSLfinal_State, URL_of_Anchor, Prefix_Suffix, URL_Length
+
+*~~*SO LET'S VISUALIZE**~~*
+  colors = c("#CD1658", "#4000E6")
+
+
+Graphs to make:
+Waffle chart 
+```{r}
+ggplot(phish, aes(x = Result, color = Result)) + geom_histogram(fill = "#3ECBC4") + ggtitle("Histogram of Result")
+```
+
+The dataset has identified more websites to be phishing than not phishing. 
+
+Bar plot 
+Bar plot with a grouping 
+Box plot  (used with arrange)
+Boxen plot 
+
+#Splitting the Data into Train and Test Sets
+
+60% of the data will be in the training set. 
+
+```{r}
+trainSet <- createDataPartition(phish$Result, p=.6)[[1]]
+phish.train <- phish[trainSet,]
+phish.test <- phish[-trainSet,]
+```
+
+#Modeling
+MODELS TO TRY:
+Naive Bayes
+RIPPER
+XGboost
+Light GBM 
+
+We can use Naive Bayes and RIPPER (rRepeated Incremental Pruning to Produce Error Reduction). Each model will have a section for feature extraction, modeling, and evaluation. Then after we preform all those steps, we will enter the deployment phase by avowing which model is the most optimal.
+
+
+##Modeling for Naive Bayes
+
+```{r}
+phish.train$Result <- as.factor(phish.train$Result)
+phish.test$Result <- as.factor(phish.test$Result)
+```
+
+```{r}
+phish.nb.model <- naiveBayes(Result ~ ., data = phish.train)
+phish.nb.pred <- predict(phish.nb.model, phish.test)
+  
+eval_model(phish.nb.pred, phish.test)
+```
+
+Out of the box Naive Bayes: 71% accuracy.
+
+##Feature Extraction for Naive Bayes
+```{r}
+control <- rfeControl(functions = nbFuncs)
+rfe <- rfe(phish.train[,1:30], as.factor(phish.train[,31]), sizes = c(1:30), rfeControl = control)
+```
+
+```{r}
+rfe
+```
