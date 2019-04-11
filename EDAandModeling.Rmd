@@ -13,14 +13,12 @@ library(OneR)
 library(mlbench)
 library(e1071)
 library(rpart)
-
 ```
 
 #Exploratory Data Analysis 
 
-
 ```{r}
-phish <- read.csv('/Users/vee/Downloads/TrainingDataset.csv')
+phish <- read.csv('/students/home/vweiss/Desktop/TrainingDataset.csv')
 ```
 
 We begin Exploratory Data Analysis by seeing the correlations between the variables.
@@ -128,6 +126,15 @@ rfe
 
 Recursive feature extraction with 25 repetition of bootstraps reports that the top 5 variables are SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, and Links_in_tags. 
 
+Let's see what happens if we only use the top 5 variables.
+
+```{r}
+phish.nb.model <- naiveBayes(Result ~ SSLfinal_State+URL_of_Anchor+web_traffic+having_Sub_Domain+Links_in_tags, data = phish.train)
+phish.nb.pred <- predict(phish.nb.model, phish.test)
+  
+eval_model(phish.nb.pred, phish.test)
+```
+
 ##Modeling for Ripper - use RIPPER to create a rule set
 
 ```{r}
@@ -181,5 +188,18 @@ phish.xgboost <- xgboost(data = sparse_matrix, label = output_vector, max_depth 
 phish.xg.pred <- predict(phish.xgboost, phish.test)
 
 eval_model(phish.xg.pred, phish.test)
-
 ```
+
+##Modeling with Neural Networks
+
+```{r}
+model <- keras_model_sequential()
+
+hiddenlayers <- layer_dense(units = 7370, activation = 'relu') %>%
+                layer_dropout(rate=0.4) %>%
+                layer_dense(units = 7370, activation = 'relu') %>% 
+                layer_dropout(rate = 0.4) %>%
+                layer_dense(units = 1, activation = 'softmax')
+summary(models)
+```
+
