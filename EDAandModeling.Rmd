@@ -13,12 +13,15 @@ library(OneR)
 library(mlbench)
 library(e1071)
 library(rpart)
+library(magrittr)
+library(keras)
 ```
 
 #Exploratory Data Analysis 
 
+
 ```{r}
-phish <- read.csv('/students/home/vweiss/Desktop/TrainingDataset.csv')
+phish <- read.csv('/Users/vee/Downloads/TrainingDataset.csv')
 ```
 
 We begin Exploratory Data Analysis by seeing the correlations between the variables.
@@ -31,7 +34,7 @@ cor.p[]
 cor.p
 corrplot(cor.p, type = "upper", tl.pos = "td",
          method = "circle", tl.cex = 0.5, tl.col = 'black',
-         order = "hclust", diag = FALSE)
+         order = "hclust", diag = FALSE, main = "Correlation Plot")
 ```
 
 It appears that a relationship between domain_registration length and the following variables: URL_Length, Result, Request_URL. Based on the correlation, Domain_registration_length has the strongest relationship with Request_URL. 
@@ -59,7 +62,7 @@ Shortning_Service and Redirect
 double_slash_redirecting and Redirect
 
 
-Variables with one or more positive otable correlation are: Shortning_Service, HTTPS_Token, Abnormal_URL, DNSRecord, Favicon, on_mouseover, Submitting_to_email, port, iframe, RightClick,SSLfinal_State, URL_of_Anchor, Prefix_Suffix, URL_Length
+Variables with one or more positive notable correlations are: Shortning_Service, HTTPS_Token, Abnormal_URL, DNSRecord, Favicon, on_mouseover, Submitting_to_email, port, iframe, RightClick,SSLfinal_State, URL_of_Anchor, Prefix_Suffix, URL_Length
 
 *~~*SO LET'S VISUALIZE**~~*
   colors = c("#CD1658", "#4000E6")
@@ -67,8 +70,31 @@ Variables with one or more positive otable correlation are: Shortning_Service, H
 
 Graphs to make:
 Waffle chart 
+
 ```{r}
-ggplot(phish, aes(x = Result, color = Result)) + geom_histogram(fill = "#3ECBC4") + ggtitle("Histogram of Result")
+ggplot(phish, aes(x=Result, fill = '#CD1658')) +
+  geom_bar() + theme_minimal() + legend()
+```
+
+```{r}
+barplot(resultsPhish)
+legend(legend = c("Phishing, Legitimate"))
+```
+
+```{r}
+ggplot(phish, aes(x = Result, color = Result)) + geom_histogram(fill = "#3ECBC4") + ggtitle("Histogram of Result") + scale_x_continuous(breaks = seq(-1, 1, by = 1)) 
+
+```
+
+
+```{r}
+resultsLegitimate <- phish$Result == 1
+resultsPhish <- phish$Result == 0
+```
+
+```{r}
+with(phish, table(Result, SSLfinal_State))
+
 ```
 
 The dataset has identified more websites to be phishing than not phishing. 
@@ -90,12 +116,10 @@ phish.test <- phish[-trainSet,]
 
 #Modeling
 MODELS TO TRY:
-Naive Bayes
-RIPPER
 XGboost
 Light GBM 
 
-We can use Naive Bayes and RIPPER (rRepeated Incremental Pruning to Produce Error Reduction). Each model will have a section for feature extraction, modeling, and evaluation. Then after we preform all those steps, we will enter the deployment phase by avowing which model is the most optimal.
+We can use Naive Bayes and RIPPER (Repeated Incremental Pruning to Produce Error Reduction). Each model will have a section for feature extraction, modeling, and evaluation. Then after we preform all those steps, we will enter the deployment phase by avowing which model is the most optimal.
 
 
 ##Modeling for Naive Bayes
@@ -126,13 +150,14 @@ rfe
 
 Recursive feature extraction with 25 repetition of bootstraps reports that the top 5 variables are SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, and Links_in_tags. 
 
-Let's see what happens if we only use the top 5 variables.
+##Add in the part of R from the Linux machine on here
 
 ```{r}
 phish.nb.model <- naiveBayes(Result ~ SSLfinal_State+URL_of_Anchor+web_traffic+having_Sub_Domain+Links_in_tags, data = phish.train)
 phish.nb.pred <- predict(phish.nb.model, phish.test)
   
 eval_model(phish.nb.pred, phish.test)
+
 ```
 
 ##Modeling for Ripper - use RIPPER to create a rule set
@@ -174,32 +199,153 @@ summary(phish.c45tree.eval)
 XGboost is a Kaggle favorite and kind of the cool kid on the block. 
 
 XGboost can only deal with numeric data, not categorical. So we'll have to encode the categorical data with one-hot encoding. A sparse matrix function can be used to preform one-hot encoding.
+We should change -1 and 1 in the Result column to 0 and 1. So where we have -1, we should have 0. 
 
 ```{r}
-sparse_matrix <- sparse.model.matrix(Result ~ ., data = phish.train)
-output_vector <- df[,Result] == 1
+phish.train$Result <- gsub(-1, 0, phish.train$Result)
+```
+
+```{r}
+train.matrix <- sparse.model.matrix(Result~.-1,phish.train)
+#test.matrix <- sparse.model.matrix(phish.test)
+```
+
+```{r}
+output_vector = as.numeric(phish.train$Result)
+```
+
+We also need to put the test data into a sparse matrix.
+
+```{r}
+sparse_matrix_test <- sparse.model.matrix(Result ~ .-1, data = phish.test)
+phish.test$Result <- gsub(-1, 0, phish.test$Result)
+output_vector_test = as.numeric(phish.test$Result)
 ```
 
 Now we build the xgboost model.
 
 ```{r}
-phish.xgboost <- xgboost(data = sparse_matrix, label = output_vector, max_depth = 4, eta = 1, nthread = 2, nrounds = 10, objective = "binary:logistic")
-
-phish.xg.pred <- predict(phish.xgboost, phish.test)
-
-eval_model(phish.xg.pred, phish.test)
+phish.xgboost <- xgboost(data = train.matrix, label = output_vector, eta = 1, nrounds = 10, nthread = 2, objective = "binary:logistic")
 ```
 
 ##Modeling with Neural Networks
 
-```{r}
-model <- keras_model_sequential()
+Create the neural network for five variables.
 
-hiddenlayers <- layer_dense(units = 7370, activation = 'relu') %>%
-                layer_dropout(rate=0.4) %>%
-                layer_dense(units = 7370, activation = 'relu') %>% 
-                layer_dropout(rate = 0.4) %>%
-                layer_dense(units = 1, activation = 'softmax')
-summary(models)
+#CODE FOR NEURALNET
+
+Step 1: 
+Preprocess the data. Result should have 0 and 1 instead of -1 and 1. 
+```{r}
+library(neuralnet)
+phish.train.NN <- phish.train
+phish.train.NN$Result <- gsub(-1, 0, phish.train$Result)
 ```
 
+Preprocessing above for the testing set.
+```{r}
+phish.test.NN <- phish.test
+phish.test.NN$Result <- gsub(-1, 0, phish.test$Result)
+```
+
+```{r}
+library(dplyr)
+colsOfInterest<- phish.train.NN %>% select(SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, Links_in_tags, Result)
+```
+
+```{r}
+colsOfInterest <- names(colsOfInterest)
+```
+
+```{r}
+f <- as.formula("Result ~ .")
+```
+
+```{r}
+nn <- neuralnet(f, data=phish.train.NN, hidden = c(3,4), linear.output=FALSE)
+```
+
+Print the neural network
+```{r}
+plot(nn)
+```
+
+
+##EVALUATE NEURAL NETWORK
+
+PREPARING THE TESTING SET FOR NN: 
+We need to replace the -1s with 0s. 
+
+
+Need to reproduce above for the testing set.
+
+```{r}
+colsOfInterestTest <- phish.test.NN %>% select(SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, Links_in_tags, Result)
+```
+
+Now we need to create predictions off of the test set.
+
+```{r}
+predicted.nn5vars <- neuralnet::compute(nn_5Vars, colsOfInterestTest)
+```
+
+Make a confusion matrix to evaluate.
+
+```{r}
+confusionMatrixNN<- confusionMatrix(round(predicted.nn5vars$net.result), colsOfInterestTest$Result)
+print(confusionMatrixNN)
+```
+
+Print out the net.result 
+```{r}
+print(head(predicted.nn5vars$net.result))
+```
+
+Now we round probabilities to predict yes or no.
+
+```{r}
+predicted.nn5vars$net.result <- sapply(predicted.nn5vars$net.result,round,digits=0)
+```
+
+```{r}
+table(phish.test.NN$Result, predicted.nn5vars$net.result)
+```
+
+```{r}
+nn_allVars <- neuralnet(Result ~ ., data=phish.train, hidden = c(7370), linear.output=FALSE)
+```
+
+```{r}
+phish.train.matrix <- as.matrix(phish.train)
+phish.test.matrix <- as.matrix(phish.test)
+```
+
+#CODE FOR KERAS 
+
+```{r}
+phish.NN <- keras_model_sequential() 
+#Units should be 2/3 of the input layer....7370??????? Lol What Am I Doing
+phish.NN %>% 
+                layer_dense(units = 7370, activation = 'relu') %>%
+                layer_dropout(rate = 0.4) %>%
+                layer_dense(units = 7370, activation = 'relu') %>%
+                layer_dropout(rate = 0.4) %>%
+                layer_dense(units = 1, activation = 'softmax')
+```
+
+
+```{r}
+phish.NN %>% 
+  compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = c('accuracy'))
+```
+
+
+```{r}
+neuralnetwork <- phish.NN %>% fit(
+  phish.train.matrix, epochs = 30, batch_size = 138, validation_split = 0.2
+)
+```
+
+```{r}
+neuralnetwork %>% evaluate(phish.train.matrix, phish.test.matrix)
+```
