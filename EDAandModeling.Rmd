@@ -13,15 +13,12 @@ library(OneR)
 library(mlbench)
 library(e1071)
 library(rpart)
-library(magrittr)
-library(keras)
 ```
 
 #Exploratory Data Analysis 
 
-
 ```{r}
-phish <- read.csv('/Users/vee/Downloads/TrainingDataset.csv')
+phish <- read.csv('/students/home/vweiss/Desktop/TrainingDataset.csv')
 ```
 
 We begin Exploratory Data Analysis by seeing the correlations between the variables.
@@ -258,11 +255,23 @@ colsOfInterest <- names(colsOfInterest)
 ```
 
 ```{r}
-f <- as.formula("Result ~ .")
+#f <- as.formula("Result ~ .")
+f <- as.formula(paste("Result ~ ", 
+      paste(names(phish.train.NN[!names(phish.train.NN) %in% 'Result']), 
+            collapse = " + "), sep=""))
+
 ```
 
 ```{r}
-nn <- neuralnet(f, data=phish.train.NN, hidden = c(3,4), linear.output=FALSE)
+phish.train.NN$Result<- as.numeric(phish.train.NN$Result)
+```
+
+```{r}
+phish.test.NN$Result <- as.numeric(phish.test.NN$Result)
+```
+
+```{r}
+nn <- neuralnet(f, data=phish.train.NN, hidden = c(3,4), algorithm = 'backprop', learningrate = 0.02, linear.output = FALSE)
 ```
 
 Print the neural network
@@ -279,20 +288,37 @@ We need to replace the -1s with 0s.
 
 Need to reproduce above for the testing set.
 
-```{r}
-colsOfInterestTest <- phish.test.NN %>% select(SSLfinal_State, URL_of_Anchor, web_traffic, having_Sub_Domain, Links_in_tags, Result)
-```
-
 Now we need to create predictions off of the test set.
 
 ```{r}
-predicted.nn5vars <- neuralnet::compute(nn_5Vars, colsOfInterestTest)
+testing.for.Predicts <- (phish.test.NN[,-31])
+```
+
+```{r}
+predicted.nn <- neuralnet::compute(nn, testing.for.Predicts)
+```
+
+Let's look at the results.
+
+```{r}
+results <- data.frame(actual = phish.test.NN$Result, prediction = predicted.nn$net.result)
+```
+
+```{r}
+results
 ```
 
 Make a confusion matrix to evaluate.
 
 ```{r}
-confusionMatrixNN<- confusionMatrix(round(predicted.nn5vars$net.result), colsOfInterestTest$Result)
+roundedresults <- sapply(results, round, digits = 0)
+roundedresultsdf <- data.frame(roundedresults)
+attach(roundedresultsdf)
+table(actual,prediction)
+```
+
+```{r}
+confusionMatrixNN<- confusionMatrix(round(predicted.nn$net.result), phish.test.NN$Result)
 print(confusionMatrixNN)
 ```
 
