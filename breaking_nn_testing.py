@@ -1,6 +1,6 @@
 import numpy as np 
 
-
+#HEAVY WIP, just for fun + learning
 
 epsilons = [0, 0.25, 0.50, 0.75]
 pretrained_model = 'filepath' #place filepath of the model here 
